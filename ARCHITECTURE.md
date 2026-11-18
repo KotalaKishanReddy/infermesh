@@ -27,11 +27,24 @@ deadline, input/result hashes, state). Money movement is escrow-shaped:
 requester locks budget at `create_job`; `confirm_result` releases
 `budget − fee`; `timeout_refund` returns funds after the deadline.
 
-**Verification (offchain + onchain-compatible):**
+**Integrity (hash commitment, offchain + onchain-compatible):**
 `result_hash = sha256(input || output || modelId)`. The chain stores only
-hashes (cheap); full inputs/outputs live offchain with the requester. A wrong
-model ID fails verification — providers cannot silently substitute a cheaper
-model. This is the "verify which model handled it" requirement, implemented.
+hashes (cheap); full inputs/outputs live offchain with the requester.
+Recomputing the hash proves the output was not tampered with after submission.
+It does NOT prove which model ran — the hash is computed from the model the
+requester asked for, so a substituted cheaper model still verifies. Never
+claim otherwise.
+
+**Authenticity (reference spot-checks, v1):** the marketplace samples jobs
+(`SPOT_CHECK_RATE`, default 1.0 in demo) and re-runs the input through a
+trusted reference backend for the CLAIMED model, then scores token-overlap
+(`textSimilarity`, Jaccard; pass at ≥ 0.5). Same-model outputs agree (~1.0 on
+mock backends); substituted families diverge (measured 0.375–0.429). Pass/total
+per provider is public on the leaderboard and each job carries its agreement
+score. This is a probabilistic signal, not a proof: it catches lazy
+substitution, not a determined adversary running a close rival model. The
+upgrade path is TEE/attestation receipts attached to `submit_result`
+(grant milestone 2).
 
 **Reputation:** `score_x100` starts at 1000 (10.00), +25 per confirmed job,
 −150 per timeout, saturating at [0, 10000]. The leaderboard sorts by score,

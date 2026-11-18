@@ -19,6 +19,8 @@
  *   GET  /api/events
  */
 import http from "node:http";
+import { SPOT_CHECK_THRESHOLD, textSimilarity } from "@infermesh/sdk";
+import { runInference } from "./inference.js";
 import { ledger, saveLedger } from "./store.js";
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -230,6 +232,24 @@ const server = http.createServer(async (req, res) => {
         body.output,
         checkedLatency(body.latencyMs),
       );
+      // Model-authenticity spot-check: re-run the input through a trusted
+      // reference backend for the CLAIMED model and compare outputs. A provider
+      // that substituted a cheaper model diverges here. This never fails the
+      // submit itself — it only records a public pass/flag signal.
+      try {
+        const rate = Number(process.env.SPOT_CHECK_RATE ?? 1);
+        if (rate > 0 && Math.random() < Math.min(1, Math.max(0, rate))) {
+          const ref = await runInference(job.modelId, job.input, job.maxTokens);
+          const agreement = textSimilarity(job.output ?? "", ref.output);
+          job.spotCheckAgreement = agreement;
+          ledger.recordSpotCheck(body.providerId, agreement);
+          if (agreement < SPOT_CHECK_THRESHOLD) {
+            console.warn(`[api] spot-check FLAG job #${job.id} provider=${body.providerId} agreement=${agreement.toFixed(3)}`);
+          }
+        }
+      } catch (err) {
+        console.warn(`[api] spot-check skipped for job ${job.id}: ${(err as Error).message}`);
+      }
       saveLedger();
       json(res, 200, { job });
       log(200);

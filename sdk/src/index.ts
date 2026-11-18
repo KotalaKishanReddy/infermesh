@@ -34,6 +34,9 @@ export interface ProviderInfo {
   /** 0..10000 (100x). Starts at 1000. */
   scoreX100: number;
   avgLatencyMs: number;
+  /** Spot-check record: reference-output agreement vs the claimed model. */
+  spotCheckPass: number;
+  spotCheckTotal: number;
   active: boolean;
 }
 
@@ -46,6 +49,8 @@ export interface JobInfo {
   inputHash: string;
   output: string | null;
   resultHash: string | null;
+  /** Token-overlap vs a reference run of the claimed model; null = not sampled. */
+  spotCheckAgreement: number | null;
   budgetLamports: number;
   maxTokens: number;
   state: JobState;
@@ -77,7 +82,13 @@ export function resultCommitment(input: string, output: string, modelId: string)
   return sha256Hex(`${input}\n${output}\n${modelId}`);
 }
 
-/** Recompute and compare — the "verify which model handled it" story. */
+/**
+ * Recompute and compare — this proves the output was NOT TAMPERED WITH after
+ * submission. It does NOT prove which model ran: the hash is computed from the
+ * model the requester asked for, so a provider that quietly substitutes a
+ * cheaper model still verifies. Model authenticity comes from spot-checks
+ * (see textSimilarity / recordSpotCheck), not from this hash.
+ */
 export async function verifyResult(
   input: string,
   output: string,
@@ -85,6 +96,35 @@ export async function verifyResult(
   expectedHash: string,
 ): Promise<boolean> {
   return (await resultCommitment(input, output, modelId)) === expectedHash;
+}
+
+// ---------------------------------------------------------------- spot-checks
+//
+// First version of real model-authenticity verification: the marketplace
+// re-runs a sampled job through a trusted reference backend for the CLAIMED
+// model and compares the two outputs. Same-model outputs share vocabulary and
+// structure (high token overlap); a substituted cheaper model diverges.
+// Probabilistic, not a proof — TEE/attestation receipts are the upgrade path.
+
+/** Agreement at or above this counts as a passed spot-check. */
+export const SPOT_CHECK_THRESHOLD = 0.5;
+
+/** Jaccard similarity over lowercase alphanumeric tokens (length > 1). */
+export function textSimilarity(a: string, b: string): number {
+  const tokens = (s: string): Set<string> =>
+    new Set(
+      s
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((t) => t.length > 1),
+    );
+  const A = tokens(a);
+  const B = tokens(b);
+  if (A.size === 0 && B.size === 0) return 1;
+  if (A.size === 0 || B.size === 0) return 0;
+  let inter = 0;
+  for (const t of A) if (B.has(t)) inter++;
+  return inter / (A.size + B.size - inter);
 }
 
 // ---------------------------------------------------------------- math (mirrors programs/infermesh)
@@ -218,7 +258,7 @@ export class MockLedger {
     this.events.push({ type, at: Date.now(), jobId, providerId, detail });
   }
 
-  registerProvider(p: Omit<ProviderInfo, "completedJobs" | "failedJobs" | "scoreX100" | "avgLatencyMs" | "active">): ProviderInfo {
+  registerProvider(p: Omit<ProviderInfo, "completedJobs" | "failedJobs" | "scoreX100" | "avgLatencyMs" | "spotCheckPass" | "spotCheckTotal" | "active">): ProviderInfo {
     validateProviderParams(p.id, p.modelIds, p.pricePer1kTokensLamports, p.stakeLamports);
     if (this.providers.has(p.id)) throw new Error(`provider ${p.id} already registered`);
     const full: ProviderInfo = {
@@ -227,6 +267,8 @@ export class MockLedger {
       failedJobs: 0,
       scoreX100: 1000,
       avgLatencyMs: 0,
+      spotCheckPass: 0,
+      spotCheckTotal: 0,
       active: true,
     };
     this.providers.set(p.id, full);
@@ -246,6 +288,7 @@ export class MockLedger {
       inputHash: await inputCommitment(input, modelId),
       output: null,
       resultHash: null,
+      spotCheckAgreement: null,
       budgetLamports,
       maxTokens,
       state: JobState.Open,
@@ -316,6 +359,24 @@ export class MockLedger {
 
   leaderboard(): ProviderInfo[] {
     return [...this.providers.values()].sort((a, b) => b.scoreX100 - a.scoreX100);
+  }
+
+  /**
+   * Record a spot-check outcome for a provider. The agreement score comes
+   * from comparing the submitted output against a trusted reference run of
+   * the CLAIMED model (see textSimilarity). Never call with a score computed
+   * against any other model — that would invert the signal.
+   */
+  recordSpotCheck(providerId: string, agreement: number): { passed: boolean; agreement: number } {
+    const provider = this.mustProvider(providerId);
+    if (!Number.isFinite(agreement) || agreement < 0 || agreement > 1) {
+      throw new Error("agreement must be in [0, 1]");
+    }
+    const passed = agreement >= SPOT_CHECK_THRESHOLD;
+    provider.spotCheckTotal += 1;
+    if (passed) provider.spotCheckPass += 1;
+    this.emit("spotcheck", undefined, providerId, `agreement=${agreement.toFixed(3)} ${passed ? "pass" : "FLAG"}`);
+    return { passed, agreement };
   }
 
   /** Serialize full ledger state for crash-safe persistence. */

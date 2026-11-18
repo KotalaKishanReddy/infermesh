@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "daemon": "node dist/daemon.js",
-    "test": "node --test test/"
+    "test": "node --test"
   },
   "license": "MIT",
   "devDependencies": {

@@ -16,8 +16,9 @@ One interface where developers **choose, verify, and pay** AI inference provider
 Built for the Solana [Request for Startups](https://solana.com/request-for-startups)
 prompt *"An open marketplace for AI inference"*.
 
-> **Choose** from a staked provider leaderboard · **Verify** every result with an
-> onchain-committed hash · **Pay** per job through escrow — no custodial credits.
+> **Choose** from a staked provider leaderboard · **Verify** outputs are
+> untampered (hash commitment) and providers really ran the claimed model
+> (reference spot-checks) · **Pay** per job through escrow — no custodial credits.
 
 ## ✨ Quickstart (2 minutes, no keys, no SOL)
 
@@ -43,7 +44,7 @@ the result hash. Click **Verify result hash**, then **Confirm + release payout**
 
 | Path | What it is |
 |---|---|
-| `programs/infermesh/` | Anchor program: registry with real stake, listings, per-job vault-PDA escrow, owner-checked claims, refunds, disputes |
+| `programs/infermesh/` | Anchor program: registry with real stake, listings, per-job vault-PDA escrow, owner-checked claims, refunds, disputes. Not yet deployed — the demo settles the identical state machine in `MockLedger`; devnet deploy is grant milestone 1 |
 | `sdk/` | Zero-dependency TypeScript SDK: commitments, fee/reputation math, validation, snapshots, `MockLedger` |
 | `backend/` | Hardened REST API (body cap, rate limit, security headers, atomic persistence) + provider daemon |
 | `app/` | React demo in Solana ecosystem theme |
@@ -53,10 +54,12 @@ the result hash. Click **Verify result hash**, then **Confirm + release payout**
 
 ## 🔐 Security
 
-Audited in-repo: real lamport escrow (no accounting-only payouts), owner-checked
-provider actions, refundable unclaimed jobs, validated + rate-limited API,
-atomic persistence. Full finding list in [SECURITY.md](SECURITY.md) —
-18/18 tests green (`npm test`, `npm run test:program`).
+Internally reviewed in-repo (see [SECURITY.md](SECURITY.md) for the finding
+list — 11 findings, all fixed): the program moves real lamports (no
+accounting-only payouts), provider actions are owner-checked, unclaimed jobs
+are refundable, and the API is validated + rate-limited with atomic
+persistence. 20/20 tests green — SDK 11, backend 4 (`npm test`), program 5
+(`npm run test:program`: 4 logic + 1 Anchor-generated ID check).
 
 ## ⚙️ Config
 

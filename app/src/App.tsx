@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { JobState, PROGRAM_ID, verifyResult, type JobInfo, type ProviderInfo } from "@infermesh/sdk";
+import { JobState, PROGRAM_ID, SPOT_CHECK_THRESHOLD, verifyResult, type JobInfo, type ProviderInfo } from "@infermesh/sdk";
 import { api } from "./api.js";
 import { connectDevnet, explorerTx, marketplacePda, type WalletState } from "./solana.js";
 import "./styles.css";
@@ -174,7 +174,7 @@ export default function App() {
         <h2>Providers ({providers.length})</h2>
         <table>
           <thead>
-            <tr><th>Provider</th><th>Models</th><th>Price / 1k tok</th><th>Stake</th><th>Done</th><th>Score</th><th>Avg latency</th></tr>
+            <tr><th>Provider</th><th>Models</th><th>Price / 1k tok</th><th>Stake</th><th>Done</th><th>Score</th><th>Avg latency</th><th>Spot-check</th></tr>
           </thead>
           <tbody>
             {providers.map((p) => (
@@ -186,6 +186,7 @@ export default function App() {
                 <td>{p.completedJobs}</td>
                 <td>{(p.scoreX100 / 100).toFixed(2)}</td>
                 <td>{p.avgLatencyMs ? `${Math.round(p.avgLatencyMs)}ms` : "—"}</td>
+                <td>{p.spotCheckTotal ? `${p.spotCheckPass}/${p.spotCheckTotal}` : "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -219,7 +220,14 @@ export default function App() {
               )}
               {verified[job.id] !== undefined && verified[job.id] !== null && (
                 <span className={verified[job.id] ? "ok" : "bad"}>
-                  {verified[job.id] ? "✓ hash verifies — correct model" : "✗ hash mismatch"}
+                  {verified[job.id] ? "✓ hash verifies — output untampered" : "✗ hash mismatch"}
+                </span>
+              )}
+              {job.spotCheckAgreement !== null && job.spotCheckAgreement !== undefined && (
+                <span className={job.spotCheckAgreement >= SPOT_CHECK_THRESHOLD ? "ok" : "bad"}>
+                  {job.spotCheckAgreement >= SPOT_CHECK_THRESHOLD
+                    ? `◉ spot-check ${job.spotCheckAgreement.toFixed(2)} — matches ${job.modelId}`
+                    : `◉ spot-check ${job.spotCheckAgreement.toFixed(2)} — FLAGGED, may not be ${job.modelId}`}
                 </span>
               )}
               {receipts[job.id] && (

@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import {
   JobState,
   MockLedger,
+  SPOT_CHECK_THRESHOLD,
   bumpScore,
   resultCommitment,
   settleAmounts,
+  textSimilarity,
   validateJobParams,
   verifyResult,
 } from "../dist/index.js";
@@ -106,6 +108,36 @@ describe("MockLedger job lifecycle", () => {
       () => clone.restore({ version: 1, providers: [], jobs: new Array(100_001).fill(0), events: [], nextJobId: 1 }),
       /size limits/,
     );
+  });
+
+  it("spot-checks separate same-model output from substituted models", () => {
+    const llamaA = "Here's a concise take on micropayments: key points first, details on demand. (demo inference)";
+    const llamaB = "Here's a concise take on micropayments: key points first, details on demand. (demo inference)";
+    const codeOut = "// demo code-model response for micropayments\nfunction answer() {\n  return \"wire a hosted model here\";\n}";
+    // Identical reference runs agree fully.
+    assert.ok(textSimilarity(llamaA, llamaB) >= 0.9);
+    // A substituted family diverges below the pass threshold (measured 0.375-0.429 on mock templates).
+    assert.ok(textSimilarity(llamaA, codeOut) < SPOT_CHECK_THRESHOLD);
+    assert.equal(textSimilarity("", ""), 1);
+    assert.equal(textSimilarity("", "hello world"), 0);
+  });
+
+  it("recordSpotCheck tracks pass/total and rejects bad scores", async () => {
+    const ledger = new MockLedger();
+    ledger.registerProvider({
+      id: "gpu-spot",
+      owner: "ownerS",
+      modelIds: ["llama-3-8b"],
+      pricePer1kTokensLamports: 1000,
+      stakeLamports: 10_000,
+    });
+    assert.deepEqual(ledger.recordSpotCheck("gpu-spot", 1.0), { passed: true, agreement: 1.0 });
+    assert.deepEqual(ledger.recordSpotCheck("gpu-spot", 0.1), { passed: false, agreement: 0.1 });
+    const p = ledger.providers.get("gpu-spot");
+    assert.equal(p.spotCheckPass, 1);
+    assert.equal(p.spotCheckTotal, 2);
+    assert.throws(() => ledger.recordSpotCheck("gpu-spot", 1.5), /\[0, 1\]/);
+    assert.throws(() => ledger.recordSpotCheck("nope", 0.9), /unknown provider/);
   });
 
   it("refunds after the deadline and slashes score", async () => {

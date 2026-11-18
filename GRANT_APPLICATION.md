@@ -33,8 +33,14 @@ served a request, and must pre-fund custodial credits per provider.
 
 - **Choose:** onchain provider registry with stake, listed models, per-token
   prices, plus a live leaderboard (score, latency, completed jobs).
-- **Verify:** `result_hash = sha256(input || output || modelId)` recorded per
-  job; one click in the UI recomputes it. Wrong-model substitution fails loudly.
+- **Verify:** two layers. (1) Tamper-evidence: `result_hash =
+  sha256(input || output || modelId)` recorded per job; one click recomputes
+  it. (2) Model authenticity: sampled jobs are re-run through a trusted
+  reference backend for the claimed model and scored for output agreement;
+  pass/flag counts are public per provider. Honest scoping: the hash alone
+  cannot catch model substitution (it is computed from the requested model),
+  which is exactly why the spot-check layer exists; TEE/attestation receipts
+  are milestone 2.
 - **Pay:** per-job escrow — requester locks budget, confirmation releases
   `budget − fee`, expiry refunds. No custodial credits.
 - **Working demo:** React app + REST API + provider daemon + Anchor program,
@@ -72,10 +78,6 @@ Relevant proof of work (all public on GitHub):
   day-to-day work inside AI agent tooling — directly relevant to an inference
   marketplace for agent-driven demand.
 
-Beyond that, private proof-of-concept work spanning numerical methods and
-document-AI pipelines backs the verification rigor behind InferMesh's hash
-commitments and mirrored onchain/offchain state machine; happy to walk through
-it on a call. Details stay private for now.
 
 ## 9. Links
 
@@ -86,8 +88,24 @@ it on a call. Details stay private for now.
   `npm run dev:app` (see README), or follow `DEMO.md`. No recorded video.
 - Contact: kishan04586@gmail.com
 
-## 10. Why now
+## 10. Landscape and differentiation
 
-The RFS explicitly requests this; agent-driven apps are about to 10× inference
-demand; Solana is the only chain where per-call escrow is economically sane.
-First neutral marketplace captures the standard.
+This is not an empty lane. **Antseed** ("BitTorrent for AI inference", live on
+Base with USDC settlement, $2.4M led by Spark Capital) does P2P discovery —
+buyers connect directly to providers with no central gateway. **UsePod.ai** is
+the Solana-native two-sided marketplace, focused on OpenAI/Anthropic-compatible
+APIs, client-side encryption, and agent traffic; cryptographic proof-of-inference
+is on their far-future roadmap.
+
+InferMesh differentiates on **verifiable execution quality with escrow attached**:
+per-job vault escrow plus hash commitments plus public reference spot-checks
+per provider — a quality signal neither competitor publishes today — MIT
+open-source, no token, Solana-settled. The bet: as agent-driven demand 10×es
+inference volume, the marketplace that proves what ran (not just routes it)
+captures the quality-sensitive segment both leave open.
+
+## 11. Why now
+
+The RFS explicitly requests this; Solana is the only chain where per-call
+escrow is economically sane; and the current leaders compete on routing and
+privacy, not on verifiable execution — that gap is open right now.
