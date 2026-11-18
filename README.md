@@ -29,6 +29,7 @@ prompt *"An open marketplace for AI inference"* (Jacob Creech, Solana Foundation
 npm install
 npm run build
 npm test          # sdk + backend tests
+node demo.mjs     # narrated end-to-end run, no video needed
 
 # Terminal 1 — API
 npm run dev:backend

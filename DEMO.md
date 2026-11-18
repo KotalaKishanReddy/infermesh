@@ -12,7 +12,7 @@ npm run dev:daemon
 npm run dev:app   # → http://localhost:5173
 ```
 
-## Script (record at 1080p, narrate each step)
+## Script (narrate each step; record at 1080p if you want a video, otherwise run `node demo.mjs`)
 
 **0:00–0:30 — The idea.**
 Show the README header. Say: "InferMesh is the open marketplace for AI
@@ -46,5 +46,5 @@ to mainnet beta."
 
 - [ ] `npm test` and `npm run test:program` pass (paste output in application)
 - [ ] Fresh `npm install` from a clean clone works
-- [ ] Video uploaded (unlisted YouTube or Loom), link in GRANT_APPLICATION.md
+- [ ] No video required: `node demo.mjs` reproduces the walkthrough live. If you record one anyway (unlisted YouTube or Loom), link it in GRANT_APPLICATION.md
 - [ ] Repo pushed to GitHub with real Team section filled in

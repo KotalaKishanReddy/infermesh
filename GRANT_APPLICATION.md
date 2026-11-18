@@ -67,9 +67,12 @@ submit with placeholders.)
 
 ## 9. Links
 
-- Repo: `<paste GitHub URL after pushing>`
-- Live demo / video: `<paste URL — record with DEMO.md>`
-- Contact: `<email / Telegram / X>`
+- Repo: https://github.com/KotalaKishanReddy/infermesh
+- Live demo: `npm install && npm run build && node demo.mjs` runs a narrated
+  end-to-end cycle (open → claim → submit → verify → confirm) with zero setup.
+  Full interactive UI: `npm run dev:backend`, `npm run dev:daemon`,
+  `npm run dev:app` (see README), or follow `DEMO.md`. No recorded video.
+- Contact: kishan04586@gmail.com
 
 ## 10. Why now
 
