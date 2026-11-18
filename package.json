@@ -1,0 +1,23 @@
+{
+  "name": "infermesh",
+  "version": "0.1.0",
+  "private": true,
+  "description": "InferMesh — open marketplace for AI inference on Solana (RFS build)",
+  "type": "module",
+  "workspaces": [
+    "sdk",
+    "backend",
+    "app"
+  ],
+  "scripts": {
+    "build": "npm run build -w @infermesh/sdk && npm run build -w @infermesh/backend && npm run build -w @infermesh/app",
+    "build:sdk": "npm run build -w @infermesh/sdk",
+    "build:program": "cargo build -p infermesh --manifest-path programs/infermesh/Cargo.toml",
+    "test": "npm run test -w @infermesh/sdk && npm run test -w @infermesh/backend",
+    "test:program": "cargo test -p infermesh --manifest-path programs/infermesh/Cargo.toml",
+    "dev:backend": "npm start -w @infermesh/backend",
+    "dev:daemon": "npm run daemon -w @infermesh/backend",
+    "dev:app": "npm run dev -w @infermesh/app"
+  },
+  "license": "MIT"
+}

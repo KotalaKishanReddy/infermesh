@@ -1,0 +1,129 @@
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import {
+  JobState,
+  MockLedger,
+  bumpScore,
+  resultCommitment,
+  settleAmounts,
+  validateJobParams,
+  verifyResult,
+} from "../dist/index.js";
+
+describe("fee math mirrors the on-chain program", () => {
+  it("splits 2.5% fee correctly", () => {
+    assert.deepEqual(settleAmounts(1_000_000, 250), { payout: 975_000, fee: 25_000 });
+  });
+  it("handles zero fee", () => {
+    assert.deepEqual(settleAmounts(500, 0), { payout: 500, fee: 0 });
+  });
+});
+
+describe("reputation math", () => {
+  it("nudges up on success and down hard on failure", () => {
+    assert.equal(bumpScore(1000, true), 1025);
+    assert.equal(bumpScore(100, false), 0);
+    assert.equal(bumpScore(9990, true), 10_000);
+  });
+});
+
+describe("commitment scheme", () => {
+  it("verifies the model that handled a request", async () => {
+    const hash = await resultCommitment("say hi", "hello there", "llama-3-8b");
+    assert.equal(await verifyResult("say hi", "hello there", "llama-3-8b", hash), true);
+    // Wrong model id must NOT verify — this is the anti-spoofing property.
+    assert.equal(await verifyResult("say hi", "hello there", "other-model", hash), false);
+  });
+});
+
+describe("MockLedger job lifecycle", () => {
+  it("open -> claim -> submit -> confirm pays out and builds reputation", async () => {
+    const ledger = new MockLedger(250);
+    ledger.registerProvider({
+      id: "gpu-1",
+      owner: "owner1",
+      modelIds: ["llama-3-8b"],
+      pricePer1kTokensLamports: 5000,
+      stakeLamports: 100_000,
+    });
+    const job = await ledger.createJob("alice", "llama-3-8b", "summarize solana", 100_000, 512);
+    assert.equal(job.state, JobState.Open);
+
+    ledger.claimJob(job.id, "gpu-1");
+    assert.equal(ledger.jobs.get(job.id).state, JobState.Claimed);
+
+    await ledger.submitResult(job.id, "gpu-1", "Solana is fast.", 320);
+    assert.equal(ledger.jobs.get(job.id).state, JobState.Submitted);
+
+    const { payout, fee } = ledger.confirmResult(job.id, "alice");
+    assert.equal(payout, 97_500);
+    assert.equal(fee, 2_500);
+    assert.equal(ledger.providers.get("gpu-1").completedJobs, 1);
+  });
+
+  it("rejects claim by a provider that does not serve the model", async () => {
+    const ledger = new MockLedger();
+    ledger.registerProvider({
+      id: "gpu-2",
+      owner: "owner2",
+      modelIds: ["mistral-7b"],
+      pricePer1kTokensLamports: 4000,
+      stakeLamports: 50_000,
+    });
+    const job = await ledger.createJob("bob", "llama-3-8b", "hi", 10_000, 128);
+    assert.throws(() => ledger.claimJob(job.id, "gpu-2"), /does not serve/);
+  });
+
+  it("rejects hostile or oversized job params", async () => {
+    assert.throws(() => validateJobParams("a".repeat(200), "m", "hi", 10, 8), /requester/);
+    assert.throws(() => validateJobParams("alice", "m;rm -rf", "hi", 10, 8), /invalid characters/);
+    assert.throws(() => validateJobParams("alice", "m", "x".repeat(5000), 10, 8), /exceeds/);
+    assert.throws(() => validateJobParams("alice", "m", "hi", 0, 8), /positive integer/);
+    assert.throws(() => validateJobParams("alice", "m", "hi", 10, 99999), /maxTokens/);
+  });
+
+  it("snapshot/restore round-trips and rejects garbage", async () => {
+    const ledger = new MockLedger(250);
+    ledger.registerProvider({
+      id: "gpu-9",
+      owner: "owner9",
+      modelIds: ["llama-3-8b"],
+      pricePer1kTokensLamports: 1000,
+      stakeLamports: 10_000,
+    });
+    await ledger.createJob("zed", "llama-3-8b", "hello", 5000, 64);
+    const snap = ledger.snapshot();
+
+    const clone = new MockLedger(999);
+    clone.restore(snap);
+    assert.equal(clone.jobs.size, 1);
+    assert.equal(clone.nextJobId, 2);
+    assert.equal(clone.feeBps, 250);
+
+    assert.throws(() => clone.restore({}), /version/);
+    assert.throws(() => clone.restore({ version: 1, providers: [], jobs: [], events: [], nextJobId: 0 }), /malformed/);
+    assert.throws(
+      () => clone.restore({ version: 1, providers: [], jobs: new Array(100_001).fill(0), events: [], nextJobId: 1 }),
+      /size limits/,
+    );
+  });
+
+  it("refunds after the deadline and slashes score", async () => {
+    const ledger = new MockLedger();
+    ledger.registerProvider({
+      id: "gpu-3",
+      owner: "owner3",
+      modelIds: ["llama-3-8b"],
+      pricePer1kTokensLamports: 4000,
+      stakeLamports: 50_000,
+    });
+    const job = await ledger.createJob("carol", "llama-3-8b", "hi", 10_000, 128, 60_000);
+    ledger.claimJob(job.id, "gpu-3");
+    assert.throws(() => ledger.timeoutRefund(job.id + 999), /unknown job/);
+    assert.throws(() => ledger.timeoutRefund(job.id), /deadline has not passed/);
+    job.deadlineAt = Date.now() - 1; // simulate expiry
+    const refunded = ledger.timeoutRefund(job.id);
+    assert.equal(refunded.state, JobState.Refunded);
+    assert.equal(ledger.providers.get("gpu-3").failedJobs, 1);
+  });
+});

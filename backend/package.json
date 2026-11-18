@@ -1,0 +1,20 @@
+{
+  "name": "@infermesh/backend",
+  "version": "0.1.0",
+  "description": "InferMesh demo backend: REST API + provider daemon (mock inference, optional OpenAI-compatible upgrade)",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "daemon": "node dist/daemon.js",
+    "test": "node --test test/"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "@infermesh/sdk": "file:../sdk"
+  }
+}

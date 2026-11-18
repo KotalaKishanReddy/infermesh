@@ -1,0 +1,78 @@
+# Grant Application — InferMesh (ready to paste)
+
+Target: **Solana Foundation Grants Program** (`solana.org/grants-funding`) and/or
+the matching track on **Superteam Earn**. Submit once the demo is running;
+link this repo + a 3-minute walkthrough (see DEMO.md).
+
+---
+
+## 1. Project name
+
+**InferMesh — open marketplace for AI inference on Solana**
+
+## 2. One-liner
+
+One interface to choose, verify, and pay AI inference providers — permissionless,
+on Solana.
+
+## 3. Which RFS idea does this address?
+
+"An open marketplace for AI inference" (AI track, proposed by Jacob Creech, VP
+Technology, Solana Foundation): *"Let developers choose, verify, and pay
+inference providers through one interface."* InferMesh implements exactly that
+triangle: provider leaderboard (choose), hash commitments (verify), per-job
+escrow (pay).
+
+## 4. Problem
+
+Inference is fragmented across closed APIs with opaque routing, pricing, and
+quality. Developers cannot compare providers neutrally, cannot prove which model
+served a request, and must pre-fund custodial credits per provider.
+
+## 5. Solution (what exists today in this repo)
+
+- **Choose:** onchain provider registry with stake, listed models, per-token
+  prices, plus a live leaderboard (score, latency, completed jobs).
+- **Verify:** `result_hash = sha256(input || output || modelId)` recorded per
+  job; one click in the UI recomputes it. Wrong-model substitution fails loudly.
+- **Pay:** per-job escrow — requester locks budget, confirmation releases
+  `budget − fee`, expiry refunds. No custodial credits.
+- **Working demo:** React app + REST API + provider daemon + Anchor program,
+  mock inference offline, hosted-model upgrade via `OPENAI_API_KEY`.
+
+## 6. Public good for Solana
+
+- New demand for SOL-denominated micropayments (per-job escrow at sub-cent fees
+  — only viable on Solana).
+- Open provider registry and commitment standard any wallet/agent can reuse.
+- All code MIT; program, SDK, and verification scheme documented for
+  integrators (agent frameworks, DePIN GPU networks like Nosana).
+
+## 7. Milestones + budget
+
+| # | Milestone (acceptance) | Amount |
+|---|---|---|
+| 1 | **Devnet launch** — program deployed to devnet, escrow settled onchain end-to-end (create → claim → submit → confirm), explorer links in UI, audit-ready README | $7,000 |
+| 2 | **Hosted + TEE providers** — 3+ hosted models behind the standard interface, signed latency/attestation receipts, provider staking UI | $9,000 |
+| 3 | **Mainnet beta + first integrators** — mainnet deploy, 100+ real jobs, 1 external integrator (agent framework or GPU network), public metrics dashboard | $9,000 |
+| Total | | **$25,000** |
+
+Timeline: M1 in 4 weeks from funding, M2 +5 weeks, M3 +6 weeks.
+
+## 8. Team
+
+Solo builder, full-stack (Rust/Anchor, TypeScript, React). State prior Solana /
+AI work and links here before submitting. (This section must be real — do not
+submit with placeholders.)
+
+## 9. Links
+
+- Repo: `<paste GitHub URL after pushing>`
+- Live demo / video: `<paste URL — record with DEMO.md>`
+- Contact: `<email / Telegram / X>`
+
+## 10. Why now
+
+The RFS explicitly requests this; agent-driven apps are about to 10× inference
+demand; Solana is the only chain where per-call escrow is economically sane.
+First neutral marketplace captures the standard.
