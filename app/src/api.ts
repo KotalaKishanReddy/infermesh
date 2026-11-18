@@ -25,4 +25,21 @@ export const api = {
       body: JSON.stringify({ requester }),
     }),
   refund: (id: number) => req<{ job: JobInfo }>(`/api/jobs/${id}/refund`, { method: "POST" }),
+  dispute: (id: number, requester: string) =>
+    req<{ job: JobInfo }>(`/api/jobs/${id}/dispute`, {
+      method: "POST",
+      body: JSON.stringify({ requester }),
+    }),
+  cancelDispute: (id: number, requester: string) =>
+    req<{ job: JobInfo }>(`/api/jobs/${id}/cancel-dispute`, {
+      method: "POST",
+      body: JSON.stringify({ requester }),
+    }),
+  finalize: (id: number) =>
+    req<{ job: JobInfo; payout: number; fee: number }>(`/api/jobs/${id}/finalize`, { method: "POST" }),
+  resolve: (id: number, winner: "provider" | "requester") =>
+    req<{ job: JobInfo }>(`/api/jobs/${id}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ winner }),
+    }),
 };

@@ -1,0 +1,39 @@
+IMPLEMENTATION READINESS REVIEW — InferMesh devnet + mainnet beta
+
+Read: programs/infermesh/src/lib.rs, sdk/src/index.ts, backend/src/server.ts, backend/src/store.ts, backend/src/daemon.ts, backend/src/inference.ts, app/src/App.tsx, app/src/solana.ts, demo.mjs, package.json, .github/workflows/ci.yml.
+
+BLOCKERS, in order:
+
+1. The onchain submit path cannot be signed as written. In lib.rs, SubmitResult declares `provider: Signer` and then requires `provider.key() == job.provider`. But claim_job sets `job.provider` to the provider PDA key, and a PDA can never sign. So no real provider can ever call submit_result. Smallest step: change SubmitResult to take the provider PDA account plus an owner/claimer signer (the way ClaimJob already does), and require signer == provider.owner and provider.key == job.provider.
+
+2. The program ID is a placeholder and there is no deploy path. `declare_id!("FMesh1111...")` in lib.rs and PROGRAM_ID in sdk/src/index.ts are not real keypairs. There is no Anchor.toml, no generated IDL, no keypair or `anchor keys sync` step, and CI never builds with anchor (it runs plain cargo test). Smallest step: generate a real program keypair, put its address in declare_id and the SDK constant, add the Anchor workspace config, and make CI run the anchor build plus `solana program deploy --url devnet` as a documented step.
+
+3. The SDK PDA builders do not match the onchain seeds. providerSeeds and jobSeeds in sdk/src/index.ts encode the marketplace/owner/job-id as text strings, but lib.rs derives those PDAs from raw 32-byte pubkeys and a little-endian job counter. Any client using these helpers derives the wrong address. Smallest step: rewrite the two helpers to accept 32-byte public keys (and a u64 counter for jobs) and build seeds the same way the program does.
+
+4. There is no onchain client at all. Nothing builds transactions: no instruction builders, no wallet signing, no vault funding, no rent handling. demo.mjs and backend/src/server.ts only call the in-memory MockLedger over REST. Smallest step: add one SDK module that builds each instruction (initialize, register, list, create, claim, submit, confirm, refund) against the IDL, and switch the demo to call it instead of the REST ledger for at least one full cycle.
+
+5. The frontend has no wallet support. app/src/solana.ts connectDevnet calls Keypair.generate() in browser memory and requests a devnet airdrop. That key is lost on refresh, holds no real funds, and never signs anything; App.tsx even labels escrow as settling in the local ledger. Smallest step: add a standard Solana wallet adapter, use the connected wallet as the requester signer for create_job and confirm_result, and delete the generated-keypair path.
+
+6. Money movement is untested. lib.rs tests cover only pure math (settle_amounts, bump_score) and enum numbers. There is no test that moves lamports: no escrow-in on create, no split payout on confirm, no refund on timeout, no double-confirm or double-refund rejection. backend/test only exercises the mock API. Smallest step: add program integration tests on a test validator covering create-funded-vault, confirm-pays-provider-plus-treasury, timeout-refunds-requester, and second-confirm/second-refund failure.
+
+7. Disputed funds have no way out. flag_dispute moves a job to Disputed, cancel_dispute moves it back to Submitted, and that is all. timeout_refund rejects Disputed jobs, so once a job is disputed and the requester walks away, the escrow sits in the vault with no resolution. Smallest step: define the arbiter path now (who decides, which instruction releases to whom) or at minimum let timeout_refund also apply to long-expired Disputed jobs.
+
+8. Stake goes in and never comes out. register_provider transfers real lamports into the provider PDA, and the code comment admits no unstake instruction exists. No operator will lock real SOL one-way. Smallest step: add an unstake/close instruction (owner-signed, clears active flag) before asking anyone to stake on devnet.
+
+9. Each job leaks rent. create_job opens a job account plus a vault account paid for by the requester, and confirm/timeout move only the budget out with move_lamports. The rent stays locked in both accounts forever with no close. Smallest step: close the vault (and the job account) on confirm and refund so rent returns to the requester.
+
+10. The chain does not enforce price or marketplace binding. list_model stores a price, but create_job never reads any listing, and claim_job never checks that the provider belongs to the same marketplace or serves the requested model. The mock ledger checks model support; the program does not. Smallest step: add the listing account to create_job or claim_job and check price and marketplace membership onchain, or document that price is advisory and remove it from the listing.
+
+11. The daemon and API have no identity. backend/src/daemon.ts claims and submits with a plain `providerId` string over REST; backend/src/server.ts accepts it without any signature. Anyone can claim or submit as any provider. Smallest step: require the daemon to sign each claim/submit with the provider owner key and verify the signature in the API (same key that will sign onchain later).
+
+12. Hosted inference can silently bill for fake output. backend/src/inference.ts runInference catches any hosted-backend failure and falls back to mock output. The daemon then submits that mock output as if the claimed model produced it, and server.ts still pays out on confirm. Smallest step: remove the silent fallback on the submit path (fail the job instead) and label mock output so it can never be confirmed as hosted work.
+
+13. There are no spend controls. The API rate limit (120 req/min/IP in server.ts) limits request rate, not money. No per-requester budget cap, no daily spend cap, fee_bps is fixed at initialize with no update instruction, and treasury is a single admin key with no multisig or rotation story. Smallest step: add a configurable per-requester spend cap and a fee-update instruction gated to a multisig admin before mainnet beta.
+
+14. Model authenticity for hosted/TEE providers is only a heuristic. Verification today is textSimilarity Jaccard overlap (sdk/src/index.ts, SPOT_CHECK_THRESHOLD 0.5) against a reference run that uses the same OPENAI_API_KEY as the provider path. There is no attestation, no receipt, no TEE story beyond a comment. Smallest step: for the hosted milestone, sign reference-run receipts with a held key and record them per job; treat TEE attestation as the later replacement, not the spot-check score.
+
+15. Mainnet launch needs are absent: no audit, no upgrade-authority plan, no key/secret handling for operators (OPENAI_API_KEY is a bare env var shared by daemon and API), no monitoring or abuse story. Smallest step: commission the audit, document upgrade authority plus admin/treasury multisig, and give operators a key-management page (generate, fund, stake, rotate) before beta.
+
+What in the demo does NOT transfer: everything about money. Job creation, escrow, claim, submit, confirm payout, refund, stake, fees, PDA derivation, wallet signing, vault rent, deadlines (slots onchain vs milliseconds in the mock) — all of these run only in MockLedger plus ledger.json snapshotting in backend/src/store.ts. The app wires only as far as displaying the marketplace PDA string.
+
+THE SINGLE MOST LOAD-BEARING MISSING PIECE: a working signed end-to-end onchain job cycle on devnet (create with real escrow, claim, submit, confirm payout, or timeout refund, all with real lamports and real signatures). It is blocked by items 1-5 above, and until it exists every other milestone (hosted providers, TEE, mainnet beta) is planning on top of an unproven settlement path.

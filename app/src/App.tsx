@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { JobState, PROGRAM_ID, SPOT_CHECK_THRESHOLD, verifyResult, type JobInfo, type ProviderInfo } from "@infermesh/sdk";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { CONFIRM_WINDOW_MS, JobState, PROGRAM_ID, SPOT_CHECK_THRESHOLD, disputeBond, verifyResult, type JobInfo, type ProviderInfo } from "@infermesh/sdk";
 import { api } from "./api.js";
-import { connectDevnet, explorerTx, marketplacePda, type WalletState } from "./solana.js";
+import { explorerAddress, explorerTx, marketplacePda } from "./solana.js";
 import "./styles.css";
 
 const MODELS = ["llama-3-8b", "mistral-7b", "code-7b"];
@@ -12,6 +15,7 @@ const STATE_LABEL: Record<number, string> = {
   [JobState.Confirmed]: "confirmed",
   [JobState.Refunded]: "refunded",
   [JobState.Disputed]: "disputed",
+  [JobState.Finalized]: "finalized",
 };
 
 export default function App() {
@@ -26,9 +30,20 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [verified, setVerified] = useState<Record<number, boolean | null>>({});
   const [receipts, setReceipts] = useState<Record<number, { payout: number; fee: number }>>({});
-  const [wallet, setWallet] = useState<WalletState | null>(null);
+  const { connection } = useConnection();
+  const { publicKey, connected } = useWallet();
+  const [balanceSol, setBalanceSol] = useState<number | null>(null);
+  const [airdropSig, setAirdropSig] = useState<string | null>(null);
   const [pda, setPda] = useState<string>("");
   const [walletBusy, setWalletBusy] = useState(false);
+
+  useEffect(() => {
+    if (!connected || !publicKey) {
+      setBalanceSol(null);
+      return;
+    }
+    connection.getBalance(publicKey).then((lamports) => setBalanceSol(lamports / LAMPORTS_PER_SOL)).catch(() => setBalanceSol(null));
+  }, [connected, publicKey, connection]);
 
   const refresh = useCallback(async () => {
     try {
@@ -75,18 +90,37 @@ export default function App() {
     }
   }
 
+  async function act(promise: Promise<unknown>, receipt?: { payout: number; fee: number }, id?: number) {
+    try {
+      const r = (await promise) as { payout?: number; fee?: number };
+      if (receipt && id !== undefined) {
+        setReceipts((prev) => ({ ...prev, [id]: { payout: receipt.payout, fee: receipt.fee } }));
+      } else if (id !== undefined && typeof r?.payout === "number" && typeof r?.fee === "number") {
+        setReceipts((prev) => ({ ...prev, [id]: { payout: r.payout as number, fee: r.fee as number } }));
+      }
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   async function verifyJob(job: JobInfo) {
     if (!job.output || !job.resultHash) return;
     const ok = await verifyResult(job.input, job.output, job.modelId, job.resultHash);
     setVerified((prev) => ({ ...prev, [job.id]: ok }));
   }
 
-  async function connectWallet() {
+  async function airdrop() {
+    if (!publicKey) return;
     setWalletBusy(true);
     try {
-      setWallet(await connectDevnet());
+      const sig = await connection.requestAirdrop(publicKey, LAMPORTS_PER_SOL);
+      await connection.confirmTransaction(sig, "confirmed");
+      setAirdropSig(sig);
+      const lamports = await connection.getBalance(publicKey);
+      setBalanceSol(lamports / LAMPORTS_PER_SOL);
     } catch (err) {
-      setError(`Devnet connection failed: ${(err as Error).message}`);
+      setError(`Airdrop failed: ${(err as Error).message}`);
     } finally {
       setWalletBusy(false);
     }
@@ -150,22 +184,25 @@ export default function App() {
 
         <section className="card">
           <h2>Solana wiring</h2>
-          <p className="muted">Program ID: <code>{pda ? pda : "…"}</code> (marketplace PDA)</p>
-          {wallet ? (
+          <p className="muted">Program ID: <code>{PROGRAM_ID}</code></p>
+          <p className="muted">Marketplace PDA: {pda ? (<a href={explorerAddress(pda)} target="_blank" rel="noreferrer"><code>{pda.slice(0, 12)}…</code></a>) : "…"}</p>
+          <WalletMultiButton />
+          {connected && publicKey && (
             <div>
-              <p>Wallet <code>{wallet.publicKey.slice(0, 8)}…</code> · {wallet.balanceSol.toFixed(2)} SOL (devnet)</p>
-              {wallet.signature && (
-                <p><a href={explorerTx(wallet.signature)} target="_blank" rel="noreferrer">View airdrop on explorer</a></p>
+              <p>Wallet <code>{publicKey.toBase58().slice(0, 8)}…</code> · {balanceSol !== null ? `${balanceSol.toFixed(2)} SOL (devnet)` : "…"}</p>
+              <button className="ghost" onClick={airdrop} disabled={walletBusy}>
+                {walletBusy ? "Requesting…" : "Airdrop 1 SOL (devnet)"}
+              </button>
+              {airdropSig && (
+                <p><a href={explorerTx(airdropSig)} target="_blank" rel="noreferrer">View airdrop on explorer</a></p>
               )}
             </div>
-          ) : (
-            <button className="ghost" onClick={connectWallet} disabled={walletBusy}>
-              {walletBusy ? "Connecting…" : "Connect devnet (airdrop + PDA)"}
-            </button>
           )}
           <p className="muted small">
-            Demo escrow settles in the local ledger; the Anchor program in
-            <code> programs/infermesh</code> implements the same state machine onchain (milestone 2 deploys it to devnet).
+            Demo escrow settles in the local ledger, which mirrors the Anchor
+            program's optimistic-escrow state machine (vault PDA, bonded
+            disputes, slashable stake, permissionless finalize). Connect a
+            wallet to act as requester on devnet at milestone 1.
           </p>
         </section>
       </div>
@@ -211,10 +248,31 @@ export default function App() {
                 <>
                   <button className="ghost" onClick={() => verifyJob(job)}>Verify result hash</button>
                   <button onClick={() => confirmJob(job.id)}>Confirm + release payout</button>
+                  <button className="ghost" onClick={() => act(api.dispute(job.id, requester))}>
+                    Dispute (bond {disputeBond(job.budgetLamports).toLocaleString()})
+                  </button>
+                  {job.submittedAt !== null && Date.now() > job.submittedAt + CONFIRM_WINDOW_MS && (
+                    <button className="ghost" onClick={() => act(api.finalize(job.id), undefined, job.id)}>
+                      Finalize (window passed)
+                    </button>
+                  )}
+                </>
+              )}
+              {job.state === JobState.Disputed && (
+                <>
+                  <button className="ghost" onClick={() => act(api.cancelDispute(job.id, requester))}>
+                    Cancel dispute
+                  </button>
+                  <button className="ghost" onClick={() => act(api.resolve(job.id, "provider"))}>
+                    Resolve: provider wins
+                  </button>
+                  <button className="ghost" onClick={() => act(api.resolve(job.id, "requester"))}>
+                    Resolve: requester wins
+                  </button>
                 </>
               )}
               {(job.state === JobState.Open || job.state === JobState.Claimed) && (
-                <button className="ghost" onClick={() => api.refund(job.id).then(refresh).catch((e: Error) => setError(e.message))}>
+                <button className="ghost" onClick={() => act(api.refund(job.id))}>
                   Refund (after deadline)
                 </button>
               )}

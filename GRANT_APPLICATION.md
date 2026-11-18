@@ -31,20 +31,25 @@ served a request, and must pre-fund custodial credits per provider.
 
 ## 5. Solution (what exists today in this repo)
 
-- **Choose:** onchain provider registry with stake, listed models, per-token
-  prices, plus a live leaderboard (score, latency, completed jobs).
-- **Verify:** two layers. (1) Tamper-evidence: `result_hash =
-  sha256(input || output || modelId)` recorded per job; one click recomputes
-  it. (2) Model authenticity: sampled jobs are re-run through a trusted
-  reference backend for the claimed model and scored for output agreement;
-  pass/flag counts are public per provider. Honest scoping: the hash alone
-  cannot catch model substitution (it is computed from the requested model),
-  which is exactly why the spot-check layer exists; TEE/attestation receipts
-  are milestone 2.
-- **Pay:** per-job escrow — requester locks budget, confirmation releases
-  `budget − fee`, expiry refunds. No custodial credits.
-- **Working demo:** React app + REST API + provider daemon + Anchor program,
-  mock inference offline, hosted-model upgrade via `OPENAI_API_KEY`.
+- **Choose:** provider registry with slashable stake, listed models, per-token
+  prices, plus a live leaderboard (value-weighted score, latency, completed
+  jobs, spot-check pass/total).
+- **Verify:** tamper-evidence plus a money-backed audit path. (1) Hash
+  commitment `sha256(input || output || modelId)` proves outputs are
+  untampered — it cannot prove which model ran, and we don't claim it does.
+  (2) Reference spot-checks sample jobs per a public value/stake formula; a
+  failed check auto-opens a bonded dispute. Independent verifiers + TEE
+  receipts are milestone 2.
+- **Pay:** optimistic per-job escrow — requester locks budget, confirm OR
+  permissionless finalize releases `budget − fee`, bonded disputes with a
+  named arbiter resolve conflicts, timeouts slash stake and refund. Getting
+  paid is never optional for the buyer. No custodial credits.
+- **Working demo:** React app (real wallet adapter) + REST API + provider
+  daemon + OpenAI-compatible agent gateway, mock inference offline,
+  hosted-model upgrade via `OPENAI_API_KEY`. The Anchor program implements
+  the same state machine onchain (vault escrow, bonds, slashing, finalize)
+  and is unit-tested; devnet deployment with USDC settlement and metered
+  payout is milestone 1.
 
 ## 6. Public good for Solana
 
@@ -58,12 +63,14 @@ served a request, and must pre-fund custodial credits per provider.
 
 | # | Milestone (acceptance) | Amount |
 |---|---|---|
-| 1 | **Devnet launch** — program deployed to devnet, escrow settled onchain end-to-end (create → claim → submit → confirm), explorer links in UI, audit-ready README | $7,000 |
-| 2 | **Hosted + TEE providers** — 3+ hosted models behind the standard interface, signed latency/attestation receipts, provider staking UI | $9,000 |
-| 3 | **Mainnet beta + first integrators** — mainnet deploy, 100+ real jobs, 1 external integrator (agent framework or GPU network), public metrics dashboard | $9,000 |
+| 1 | **Enforced onchain behavior on devnet** — optimistic escrow with auto-release, bonded disputes + named arbiter, 5% slashable stake, value-weighted reputation, USDC settlement with per-token metered payout from recorded counts; third-party provider runbook; per-job explorer links. Acceptance: a full signed cycle (create → claim → submit → confirm/finalize, plus one dispute → resolve) executed by an external operator, not the team | $8,000 |
+| 2 | **Independent verification + hosted supply** — staked verifier set paid from protocol fees (slashable on disagreement), TEE/attestation receipts attached to `submit_result`, 3+ hosted models with signed latency receipts, provider staking/unstaking UI | $9,000 |
+| 3 | **Mainnet beta with paid volume** — mainnet deploy, 500+ paid jobs, 1 external integrator (agent framework via the OpenAI-compatible gateway, or a GPU network plugging into escrow+verification), public metrics dashboard. Final 20% released on hitting the volume target | $8,000 |
 | Total | | **$25,000** |
 
-Timeline: M1 in 4 weeks from funding, M2 +5 weeks, M3 +6 weeks.
+Timeline: M1 in 5 weeks from funding, M2 +6 weeks, M3 +6 weeks. No milestone
+pays for redeploying existing code — M1 buys the new enforced behavior above,
+M2 buys external verification, M3 buys usage with a holdback.
 
 ## 8. Team
 

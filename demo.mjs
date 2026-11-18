@@ -11,10 +11,11 @@ import { verifyResult } from "./sdk/dist/index.js";
 const API = "http://localhost:8787";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function start(name, args) {
+function start(name, args, env = {}) {
   const child = spawn("node", args, {
     cwd: new URL("./backend/", import.meta.url),
     stdio: "ignore",
+    env: { ...process.env, ...env },
   });
   child.on("error", (err) => {
     console.error(`[${name}] failed to start: ${err.message}`);
@@ -33,7 +34,7 @@ async function req(path, init) {
   return data;
 }
 
-const api = start("api", ["dist/server.js"]);
+const api = start("api", ["dist/server.js"], { SPOT_CHECK_RATE: "1" });
 const daemon = start("daemon", ["dist/daemon.js"]);
 const stop = () => {
   api.kill();
@@ -76,8 +77,9 @@ try {
   console.log(`   Output: ${cur.output.slice(0, 100)}...`);
 
   const ok = await verifyResult(cur.input, cur.output, cur.modelId, cur.resultHash);
-  console.log(`4. Verify result hash: ${ok ? "PASS — correct model, untampered output" : "FAIL"}`);
+  console.log(`4. Hash verifies: ${ok ? "PASS — output untampered since submission" : "FAIL"}`);
   if (!ok) throw new Error("commitment verification failed");
+  console.log(`   Spot-check agreement: ${cur.spotCheckAgreement} (reference re-run of ${cur.modelId})`);
 
   const receipt = await req(`/api/jobs/${cur.id}/confirm`, {
     method: "POST",

@@ -28,19 +28,30 @@ Enter a prompt, pick `llama-3-8b`, submit. Watch the job go
 open → claimed → submitted live as the daemon works. "Escrow is locked for the
 job's budget; the provider only gets paid on confirmation."
 
-**1:45–2:20 — Verify.**
-Open the submitted job, click **Verify result hash**. Green check.
-"Anyone can recompute `sha256(input || output || modelId)` — a provider that
-silently swaps in a cheaper model fails verification."
+**1:30–2:00 — Verify (two layers).**
+Open the submitted job, click **Verify result hash**. Green check — "this
+proves the output wasn't tampered with after submission." Then point at the
+spot-check badge: "and this proves something ran the claimed model — the
+marketplace re-ran the input through a reference backend and compared. Watch
+what happens when a provider cheats." (If time: submit a wrong-family output
+via the API and show the auto-dispute flag.)
 
-**2:20–2:50 — Pay.**
+**2:00–2:30 — Disputes with teeth.**
+Click **Dispute** — a bond posts. Click **Resolve: requester wins** and show
+the refund plus the provider's slashed stake. "Disputes cost money, winners
+are paid, ghosting gets slashed."
+
+**2:30–2:50 — Pay without permission.**
 Click **Confirm + release payout**. Show the payout/fee receipt and the
-provider's score ticking up. "Sub-cent escrow economics — only possible on Solana."
+provider's value-weighted score ticking up. "And if the requester never
+clicks, anyone can hit Finalize after the window — getting paid is never
+optional for the buyer."
 
 **2:50–3:00 — What's next.**
-Show `programs/infermesh/src/lib.rs`. "Same state machine as an Anchor program;
-grant milestones deploy it to devnet, add hosted and TEE providers, and take it
-to mainnet beta."
+Show `programs/infermesh/src/lib.rs`. "Same state machine as an Anchor
+program — optimistic escrow, bonded disputes, slashable stake. Grant
+milestone 1 puts it on devnet with USDC settlement; milestone 2 adds
+independent verifiers and TEE receipts."
 
 ## Before submitting
 

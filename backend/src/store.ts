@@ -9,6 +9,12 @@ const SNAPSHOT_PATH = path.join(DATA_DIR, "ledger.json");
 
 export const ledger = new MockLedger(250);
 
+const spendCap = Number(process.env.MAX_SPEND_PER_REQUESTER ?? NaN);
+if (Number.isInteger(spendCap) && spendCap > 0) {
+  ledger.maxSpendPerRequester = spendCap;
+  console.log(`[store] per-requester spend cap: ${spendCap} lamports`);
+}
+
 function loadSnapshot(): boolean {
   let raw: string;
   try {

@@ -6,11 +6,30 @@
  *
  *   npm run daemon   (in backend/, with the API running)
  */
+import { claimMessage, signMessage, submitMessage } from "./auth.js";
 import { runInference } from "./inference.js";
 
 const API = process.env.INFERMESH_API ?? "http://localhost:8787";
 const PROVIDER_ID = process.env.INFERMESH_PROVIDER_ID ?? "sol-gpu-01";
 const POLL_MS = Number(process.env.INFERMESH_POLL_MS ?? 2000);
+const OWNER_SECRET = process.env.INFERMESH_OWNER_SECRET ?? "";
+const REQUIRE_HOSTED = process.env.INFERMESH_REQUIRE_HOSTED === "1";
+
+if (OWNER_SECRET) {
+  // Fail fast on a malformed secret rather than submitting unsigned work.
+  try {
+    signMessage(OWNER_SECRET, new Uint8Array([0]));
+    console.log("[daemon] owner-key signing enabled");
+  } catch (err) {
+    console.error(`[daemon] bad INFERMESH_OWNER_SECRET: ${(err as Error).message}`);
+    process.exit(1);
+  }
+}
+
+function sigHeaders(message: Uint8Array): Record<string, string> {
+  if (!OWNER_SECRET) return {};
+  return { "X-Signature": signMessage(OWNER_SECRET, message) };
+}
 
 interface Job {
   id: number;
@@ -20,10 +39,10 @@ interface Job {
   maxTokens: number;
 }
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
+async function req<T>(path: string, init?: RequestInit & { headers?: Record<string, string> }): Promise<T> {
   const res = await fetch(`${API}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...init,
+    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
   });
   const data = (await res.json()) as T & { error?: string };
   if (!res.ok) throw new Error(data.error ?? `request failed: ${res.status}`);
@@ -54,6 +73,7 @@ async function tick() {
     try {
       await req(`/api/jobs/${job.id}/claim`, {
         method: "POST",
+        headers: sigHeaders(claimMessage(job.id)),
         body: JSON.stringify({ providerId: PROVIDER_ID }),
       });
     } catch {
@@ -62,12 +82,18 @@ async function tick() {
     console.log(`[daemon] claimed job #${job.id} (${job.modelId})`);
     try {
       const result = await runInference(job.modelId, job.input, job.maxTokens);
+      if (REQUIRE_HOSTED && result.backend !== "hosted") {
+        // Never submit mock output as hosted work: leave the job for expiry.
+        console.warn(`[daemon] job #${job.id}: hosted backend required, got mock — skipping submit`);
+        continue;
+      }
       if (result.output.length > 16_000) {
         console.warn(`[daemon] job #${job.id}: output too large, skipping submit`);
         continue;
       }
       await req(`/api/jobs/${job.id}/submit`, {
         method: "POST",
+        headers: sigHeaders(submitMessage(job.id)),
         body: JSON.stringify({
           providerId: PROVIDER_ID,
           output: result.output,
