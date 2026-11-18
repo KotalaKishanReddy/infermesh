@@ -1,67 +1,68 @@
 # InferMesh — Open Marketplace for AI Inference on Solana
 
-One interface where developers **choose, verify, and pay** inference providers.
+![InferMesh banner](assets/banner.png)
+
+[![CI](https://github.com/KotalaKishanReddy/infermesh/actions/workflows/ci.yml/badge.svg)](https://github.com/KotalaKishanReddy/infermesh/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/KotalaKishanReddy/infermesh?color=14F195)](https://github.com/KotalaKishanReddy/infermesh/releases)
+[![License: MIT](https://img.shields.io/github/license/KotalaKishanReddy/infermesh?color=9945FF)](LICENSE)
+[![Built on Solana](https://img.shields.io/badge/Built_on-Solana-14F195?logo=solana)](https://solana.com)
+[![Anchor](https://img.shields.io/badge/Anchor-0.31-9945FF)](https://www.anchor-lang.com)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Rust](https://img.shields.io/badge/Rust-1.96-CE422B?logo=rust)](https://www.rust-lang.org)
+[![Last commit](https://img.shields.io/github/last-commit/KotalaKishanReddy/infermesh)](https://github.com/KotalaKishanReddy/infermesh/commits/main)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-14F195)](https://github.com/KotalaKishanReddy/infermesh/pulls)
+
+One interface where developers **choose, verify, and pay** AI inference providers.
 Built for the Solana [Request for Startups](https://solana.com/request-for-startups)
-prompt *"An open marketplace for AI inference"* (Jacob Creech, Solana Foundation).
+prompt *"An open marketplace for AI inference"*.
 
-## How it works
+> **Choose** from a staked provider leaderboard · **Verify** every result with an
+> onchain-committed hash · **Pay** per job through escrow — no custodial credits.
 
-1. **Choose** — providers register onchain with a staked identity, listed models,
-   and a per-token price. A public leaderboard ranks them by success rate,
-   latency, and stake.
-2. **Verify** — every result commits to `sha256(input || output || modelId)`.
-   Anyone can recompute the hash and prove which model handled a request.
-3. **Pay** — requesters escrow lamports per job. Confirming the result releases
-   payment minus a small protocol fee; expired jobs refund automatically.
-
-## Repo layout
-
-| Path | What it is |
-|---|---|
-| `programs/infermesh/` | Anchor program: marketplace, provider registry, model listings, job escrow state machine |
-| `sdk/` | Zero-dependency TypeScript SDK: commitments, fee/reputation math, PDA seeds, `MockLedger` |
-| `backend/` | Demo REST API + provider daemon. Mock inference offline; set `OPENAI_API_KEY` to route to hosted models |
-| `app/` | React demo frontend: submit jobs, watch providers work, verify hashes, confirm payouts, devnet wallet panel |
-
-## Quickstart (2 minutes, no keys, no SOL)
+## ✨ Quickstart (2 minutes, no keys, no SOL)
 
 ```bash
 npm install
 npm run build
 npm test          # sdk + backend tests
 node demo.mjs     # narrated end-to-end run, no video needed
+```
 
-# Terminal 1 — API
-npm run dev:backend
-# Terminal 2 — provider worker
-npm run dev:daemon
-# Terminal 3 — frontend
-npm run dev:app   # open http://localhost:5173
+Full interactive UI (3 terminals):
+
+```bash
+npm run dev:backend   # REST API  → http://localhost:8787
+npm run dev:daemon     # provider worker (mock inference; set OPENAI_API_KEY for hosted)
+npm run dev:app        # React demo → http://localhost:5173
 ```
 
 Submit a prompt in the UI: the daemon claims the job, runs inference, and posts
 the result hash. Click **Verify result hash**, then **Confirm + release payout**.
 
-## Onchain program
+## 🧩 Repo layout
 
-```bash
-npm run build:program   # cargo build (needs no local validator)
-npm run test:program   # unit tests for fee math, reputation, state discriminants
-```
+| Path | What it is |
+|---|---|
+| `programs/infermesh/` | Anchor program: registry with real stake, listings, per-job vault-PDA escrow, owner-checked claims, refunds, disputes |
+| `sdk/` | Zero-dependency TypeScript SDK: commitments, fee/reputation math, validation, snapshots, `MockLedger` |
+| `backend/` | Hardened REST API (body cap, rate limit, security headers, atomic persistence) + provider daemon |
+| `app/` | React demo in Solana ecosystem theme |
+| `demo.mjs` | Self-running narrated end-to-end demo |
+| `GRANT_APPLICATION.md` | Paste-ready grant application ($25k / 3 milestones) |
+| `ARCHITECTURE.md` · `DEMO.md` · `SECURITY.md` | Design notes, reviewer walkthrough, audit record |
 
-`programs/infermesh/src/lib.rs` implements: `initialize_marketplace`,
-`register_provider` (real lamport stake), `list_model`, `create_job` (atomic
-requester → vault-PDA escrow), `claim_job` (owner-only), `submit_result`,
-`confirm_result` (vault → provider + treasury), `timeout_refund` (works for
-never-claimed jobs), `flag_dispute` / `cancel_dispute`. Demo escrow settles in
-the local ledger, which mirrors the program's state machine; devnet deployment
-is grant milestone 2.
+## 🔐 Security
 
-## Config
+Audited in-repo: real lamport escrow (no accounting-only payouts), owner-checked
+provider actions, refundable unclaimed jobs, validated + rate-limited API,
+atomic persistence. Full finding list in [SECURITY.md](SECURITY.md) —
+18/18 tests green (`npm test`, `npm run test:program`).
+
+## ⚙️ Config
 
 | Var | Effect |
 |---|---|
-| `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `INFERMESH_MODEL_MAP` | Route jobs to real hosted models (OpenAI-compatible). Any failure falls back to mock |
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `INFERMESH_MODEL_MAP` | Route jobs to real hosted models (OpenAI-compatible). Falls back to mock |
 | `INFERMESH_PROVIDER_ID` | Which seeded provider the daemon runs as (default `sol-gpu-01`) |
 | `INFERMESH_DATA_DIR` | Ledger snapshot directory (default `./data`, atomic writes) |
 | `CORS_ORIGIN` | Allowed CORS origin (default `*`; set to the app origin in production) |
@@ -70,12 +71,8 @@ is grant milestone 2.
 API posture: 64 KB body cap, 120 req/min/IP rate limit, strict input
 validation, security headers, 15 s request timeouts.
 
-## Grant submission
+## 📄 License
 
-See [GRANT_APPLICATION.md](GRANT_APPLICATION.md) (ready-to-paste application),
-[ARCHITECTURE.md](ARCHITECTURE.md) (design + security notes), and
-[DEMO.md](DEMO.md) (3-minute reviewer walkthrough script).
-
-## License
-
-MIT
+MIT © 2026 Kotala Kishan Reddy — see [LICENSE](LICENSE).
+Built by [@KotalaKishanReddy](https://github.com/KotalaKishanReddy) ·
+contact: kishan04586@gmail.com

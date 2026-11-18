@@ -61,9 +61,27 @@ Timeline: M1 in 4 weeks from funding, M2 +5 weeks, M3 +6 weeks.
 
 ## 8. Team
 
-Solo builder, full-stack (Rust/Anchor, TypeScript, React). State prior Solana /
-AI work and links here before submitting. (This section must be real — do not
-submit with placeholders.)
+**Kotala Kishan Reddy** ([@KotalaKishanReddy](https://github.com/KotalaKishanReddy),
+kishan04586@gmail.com) — solo builder, full-stack (Rust/Anchor, TypeScript, React).
+
+Relevant proof of work (all public on GitHub):
+
+- [shrinkgate](https://github.com/KotalaKishanReddy/shrinkgate) (Rust, ★5) —
+  local context-shrinking gateway for coding agents (Claude Code, Codex,
+  OpenCode), cross-platform (Linux/macOS/Windows). Systems-level Rust plus
+  day-to-day work inside AI agent tooling — directly relevant to an inference
+  marketplace for agent-driven demand.
+- [ieee30-nr](https://github.com/KotalaKishanReddy/ieee30-nr) (Python) — IEEE
+  30-bus Newton-Raphson load flow as a verified MATLAB-to-Python port with
+  Octave differential testing and a GUI. Evidence of verification rigor
+  (differential testing), the same discipline behind InferMesh's hash
+  commitments and mirrored onchain/offchain state machine.
+- [report2conf](https://github.com/KotalaKishanReddy/report2conf) (Python) —
+  long-report → page-limited conference paper pipeline (document AI in practice).
+- [Awesome-LLMOps](https://github.com/KotalaKishanReddy/Awesome-LLMOps) /
+  [Awesome-LLM](https://github.com/KotalaKishanReddy/Awesome-LLM) — curated
+  LLMOps/LLM tooling lists; fluent in the inference ecosystem this marketplace
+  serves.
 
 ## 9. Links
 
