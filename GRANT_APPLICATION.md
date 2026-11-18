@@ -71,17 +71,11 @@ Relevant proof of work (all public on GitHub):
   OpenCode), cross-platform (Linux/macOS/Windows). Systems-level Rust plus
   day-to-day work inside AI agent tooling — directly relevant to an inference
   marketplace for agent-driven demand.
-- [ieee30-nr](https://github.com/KotalaKishanReddy/ieee30-nr) (Python) — IEEE
-  30-bus Newton-Raphson load flow as a verified MATLAB-to-Python port with
-  Octave differential testing and a GUI. Evidence of verification rigor
-  (differential testing), the same discipline behind InferMesh's hash
-  commitments and mirrored onchain/offchain state machine.
-- [report2conf](https://github.com/KotalaKishanReddy/report2conf) (Python) —
-  long-report → page-limited conference paper pipeline (document AI in practice).
-- [Awesome-LLMOps](https://github.com/KotalaKishanReddy/Awesome-LLMOps) /
-  [Awesome-LLM](https://github.com/KotalaKishanReddy/Awesome-LLM) — curated
-  LLMOps/LLM tooling lists; fluent in the inference ecosystem this marketplace
-  serves.
+
+Beyond that, private proof-of-concept work spanning numerical methods and
+document-AI pipelines backs the verification rigor behind InferMesh's hash
+commitments and mirrored onchain/offchain state machine; happy to walk through
+it on a call. Details stay private for now.
 
 ## 9. Links
 
